@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intrinsic Value Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .gradient-bg { background: linear-gradient(135deg, #111827 0%, #1f2937 100%); }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 18px; width: 18px;
+            border-radius: 50%; background: #3b82f6; cursor: pointer;
+        }
+    </style>
+</head>
+<body class="gradient-bg text-gray-100 min-h-screen p-4 md:p-10">
+
+    <div class="max-w-5xl mx-auto">
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
+            <div>
+                <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+                    Stock Intrinsic Value
+                </h1>
+                <p class="text-gray-400">Multi-Model Analysis (DCF, Graham, DDM & Multiples)</p>
+            </div>
+            <div class="flex gap-2 w-full md:w-auto">
+                <input type="text" id="ticker" placeholder="Ticker (bijv. UNH)" 
+                       class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none w-full uppercase">
+                <button onclick="fetchData()" 
+                        class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-8 rounded-lg transition shadow-lg">
+                    Analyseer
+                </button>
+            </div>
+        </div>
+
+        <!-- Dashboard -->
+        <div id="dashboard" class="hidden animate-in fade-in duration-500">
+            
+            <!-- Main Metrics -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+                <div class="bg-gray-800/50 p-6 rounded-2xl border border-gray-700">
+                    <p class="text-xs text-gray-400 uppercase font-semibold mb-1">Marktprijs</p>
+                    <p id="priceDisplay" class="text-3xl font-bold">--</p>
+                </div>
+                <div class="bg-blue-900/30 p-6 rounded-2xl border border-blue-500/50">
+                    <p class="text-xs text-blue-300 uppercase font-semibold mb-1">Intrinsieke Waarde</p>
+                    <p id="intrinsicDisplay" class="text-3xl font-bold text-blue-400">--</p>
+                </div>
+                <div id="mosCard" class="p-6 rounded-2xl border transition-all duration-500">
+                    <p class="text-xs uppercase font-semibold mb-1">Margin of Safety</p>
+                    <p id="mosDisplay" class="text-3xl font-bold">--</p>
+                </div>
+                <div class="bg-gray-800/50 p-6 rounded-2xl border border-gray-700">
+                    <p class="text-xs text-gray-400 uppercase font-semibold mb-1">Status</p>
+                    <p id="statusDisplay" class="text-xl font-bold pt-1 uppercase tracking-wider">--</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Sliders / Controls -->
+                <div class="lg:col-span-1 space-y-8 bg-gray-800/40 p-8 rounded-2xl border border-gray-700">
+                    <h3 class="text-lg font-bold border-b border-gray-700 pb-2">Aannames Aanpassen</h3>
+                    
+                    <div>
+                        <div class="flex justify-between mb-2">
+                            <label class="text-sm font-medium">Jaarlijkse Groei (5j)</label>
+                            <span id="growthVal" class="text-blue-400 font-bold">8%</span>
+                        </div>
+                        <input type="range" id="growth" min="0" max="20" value="8" step="0.5" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" oninput="updateCalculation()">
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between mb-2">
+                            <label class="text-sm font-medium">WACC (Disconteringsvoet)</label>
+                            <span id="waccVal" class="text-blue-400 font-bold">7.5%</span>
+                        </div>
+                        <input type="range" id="wacc" min="5" max="15" value="7.5" step="0.1" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" oninput="updateCalculation()">
+                    </div>
+
+                    <div class="pt-4 text-xs text-gray-500 italic">
+                        * Data wordt live opgehaald van FMP (TTM basis).
+                    </div>
+                </div>
+
+                <!-- Model Breakdown -->
+                <div class="lg:col-span-2 space-y-4">
+                    <div class="bg-gray-800/40 p-6 rounded-2xl border border-gray-700">
+                        <h3 class="text-lg font-bold mb-6">Model Opsplitsing (Weging)</h3>
+                        <div class="space-y-4">
+                            <div class="flex justify-between items-center p-4 bg-gray-900/50 rounded-xl">
+                                <span>Discounted Cash Flow (40%)</span>
+                                <span id="dcfSub" class="font-mono text-emerald-400 font-bold">--</span>
+                            </div>
+                            <div class="flex justify-between items-center p-4 bg-gray-900/50 rounded-xl">
+                                <span>Benjamin Graham Formula (20%)</span>
+                                <span id="grahamSub" class="font-mono text-emerald-400 font-bold">--</span>
+                            </div>
+                            <div class="flex justify-between items-center p-4 bg-gray-900/50 rounded-xl">
+                                <span>Dividend Discount Model (20%)</span>
+                                <span id="ddmSub" class="font-mono text-emerald-400 font-bold">--</span>
+                            </div>
+                            <div class="flex justify-between items-center p-4 bg-gray-900/50 rounded-xl">
+                                <span>Relatieve P/E Target (20%)</span>
+                                <span id="peSub" class="font-mono text-emerald-400 font-bold">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loader -->
+        <div id="loader" class="hidden flex justify-center py-20">
+            <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+    </div>
+
+    <script>
+        const FMP_KEY = 'JOUW_FMP_API_KEY'; // <--- HIER JE KEY INVULLEN
+        let currentStock = null;
+
+        async function fetchData() {
+            const ticker = document.getElementById('ticker').value.trim().toUpperCase();
+            if(!ticker) return;
+
+            document.getElementById('loader').classList.remove('hidden');
+            document.getElementById('dashboard').classList.add('hidden');
+
+            try {
+                // Fetch quote, key-metrics and profile
+                const [qRes, kRes] = await Promise.all([
+                    fetch(`https://financialmodelingprep.com{ticker}?apikey=${FMP_KEY}`),
+                    fetch(`https://financialmodelingprep.com{ticker}?apikey=${FMP_KEY}`)
+                ]);
+
+                const quote = (await qRes.json())[0];
+                const metrics = (await kRes.json())[0];
+
+                if(!quote) throw new Error("Ticker niet gevonden");
+
+                currentStock = {
+                    price: quote.price,
+                    eps: metrics.netIncomePerShareTTM || 0,
+                    fcf: metrics.freeCashFlowPerShareTTM || 0,
+                    div: metrics.dividendYieldTTM * quote.price || 0,
+                    pe: quote.pe || 15
+                };
+
+                document.getElementById('loader').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+                updateCalculation();
+
+            } catch (err) {
+                alert("Fout: " + err.message);
+                document.getElementById('loader').classList.add('hidden');
+            }
+        }
+
+        function updateCalculation() {
+            if(!currentStock) return;
+
+            const g = parseFloat(document.getElementById('growth').value) / 100;
+            const r = parseFloat(document.getElementById('wacc').value) / 100;
+            
+            document.getElementById('growthVal').innerText = (g * 100).toFixed(1) + '%';
+            document.getElementById('waccVal').innerText = (r * 100).toFixed(1) + '%';
+
+            // 1. DCF Model
+            const dcf = (currentStock.fcf * (1 + g)) / (r - g);
+            
+            // 2. Graham Model
+            const graham = (currentStock.eps * (8.5 + 2 * (g * 100)) * 4.4) / 4.5;
+
+            // 3. DDM (Gordon Growth)
+            const ddm = currentStock.div > 0 ? (currentStock.div * (1 + (g*0.5))) / (r - (g*0.5)) : dcf * 0.8;
+
+            // 4. Relatieve P/E (Conservatief)
+            const peTarget = currentStock.eps * 18; 
+
+            // Gewogen Berekening
+            const intrinsic = (dcf * 0.4) + (graham * 0.2) + (ddm * 0.2) + (peTarget * 0.2);
+
+            // UI Update
+            document.getElementById('priceDisplay').innerText = `$${currentStock.price.toFixed(2)}`;
+            document.getElementById('intrinsicDisplay').innerText = `$${intrinsic.toFixed(2)}`;
+            document.getElementById('dcfSub').innerText = `$${dcf.toFixed(2)}`;
+            document.getElementById('grahamSub').innerText = `$${graham.toFixed(2)}`;
+            document.getElementById('ddmSub').innerText = `$${ddm.toFixed(2)}`;
+            document.getElementById('peSub').innerText = `$${peTarget.toFixed(2)}`;
+
+            // Margin of Safety & Status
+            const mos = ((intrinsic - currentStock.price) / intrinsic) * 100;
+            const mosEl = document.getElementById('mosDisplay');
+            const mosCard = document.getElementById('mosCard');
+            const statusEl = document.getElementById('statusDisplay');
+
+            mosEl.innerText = `${mos.toFixed(1)}%`;
+            
+            if(mos > 20) {
+                mosCard.className = "p-6 rounded-2xl border border-emerald-500 bg-emerald-900/20 text-emerald-400";
+                statusEl.innerText = "Koopwaardig";
+                statusEl.className = "text-xl font-bold pt-1 uppercase text-emerald-400";
+            } else if(mos > 0) {
+                mosCard.className = "p-6 rounded-2xl border border-yellow-500 bg-yellow-900/20 text-yellow-400";
+                statusEl.innerText = "Fair Value";
+                statusEl.className = "text-xl font-bold pt-1 uppercase text-yellow-400";
+            } else {
+                mosCard.className = "p-6 rounded-2xl border border-red-500 bg-red-900/20 text-red-400";
+                statusEl.innerText = "Overgewaardeerd";
+                statusEl.className = "text-xl font-bold pt-1 uppercase text-red-400";
+            }
+        }
+    </script>
+</body>
+</html>
